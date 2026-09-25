@@ -1,0 +1,20 @@
+[project]
+name = "statement-extractor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Syed Mohidul Islam", email = "isyedmohidul@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pycountry>=26.2.16",
+    "pydantic>=2.13.5",
+]
+
+[project.scripts]
+statement-extractor = "statement_extractor:main"
+
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
