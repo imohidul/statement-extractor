@@ -4,6 +4,10 @@ from decimal import Decimal
 from pathlib import Path
 from faker import Faker
 from statement_extractor.models import BankStatement
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 def random_amount(
@@ -139,6 +143,52 @@ def generate_statement(seed: int) -> BankStatement:
         transactions=transactions,
     )
 
+def money(value: Decimal | None) -> str:
+    """Format 1234.5 as '1,234.50'; empty string for None."""
+    return "" if value is None else f"{value:,.2f}"
+
+
+def render_pdf(statement: BankStatement, path: Path) -> None:
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Header
+    story.append(Paragraph(statement.bank_name or "", styles["Title"]))
+    story.append(Paragraph(f"Account: ****{statement.account_last_four_digits}", styles["Normal"]))
+    story.append(Paragraph(
+        f"Statement period: {statement.period_start:%d %b %Y} to {statement.period_end:%d %b %Y}",
+        styles["Normal"],
+    ))
+    story.append(Paragraph(f"Currency: {statement.currency}", styles["Normal"]))
+    story.append(Paragraph(f"Opening balance: {money(statement.opening_balance)}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    # Transaction table
+    rows = [["Date", "Description", "Debit", "Credit", "Balance"]]
+    for t in statement.transactions:
+        rows.append([
+            f"{t.date:%d/%m/%Y}",
+            t.description,
+            money(t.debit),
+            money(t.credit),
+            money(t.balance),
+        ])
+
+    table = Table(rows, colWidths=[65, 225, 65, 65, 70], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, colors.black),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+    ]))
+    story.append(table)
+
+    # Footer
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"Closing balance: {money(statement.closing_balance)}", styles["Normal"]))
+
+    SimpleDocTemplate(str(path), pagesize=A4).build(story)
+
 
 if __name__ == "__main__":
     output_dir = Path("data/synthetic")
@@ -148,4 +198,5 @@ if __name__ == "__main__":
         statement = generate_statement(seed)
         path = output_dir / f"stmt_{seed:04d}.json"
         path.write_text(statement.model_dump_json(indent=2))
+        render_pdf(statement, path.with_suffix(".pdf"))
         print(f"wrote {path}  ({len(statement.transactions)} transactions)")
